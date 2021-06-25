@@ -93,7 +93,7 @@ class Parser(DisfluencyTagger):
                 location: storage,
                 )
 
-    def run_parser(self, input_sentences):
+    def run_parser(self, input_sentences, remove_disfluency_words_bool):
         eval_batch_size = 1
         print("Loading model from {}...".format(self.model))
         assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
@@ -103,6 +103,7 @@ class Parser(DisfluencyTagger):
         parser = parse_nk.NKChartParser.from_spec(
             info["spec"], 
             info["state_dict"],
+
             )
 
         print("Parsing sentences...")
@@ -130,7 +131,7 @@ class Parser(DisfluencyTagger):
                 # disfluencies are dominated by EDITED nodes in parse trees
                 if "EDITED" not in linear_tree: 
                     df_labels.append(self.fluent(tokens))
-                else:
+                elif not remove_disfluency_words_bool:
                     df_labels.append(self.disfluent(tokens))
                     
         return parse_trees, df_labels
@@ -147,36 +148,59 @@ class Annotate(Parser):
         self.output_path = kwargs["output_path"] 
         self.model = kwargs["model"] 
         self.disfluency = kwargs["disfluency"] 
+        self.remove_df= kwargs["remove_df_words"]
 
     def setup(self): 
-        all_2004 = self.parse_sentences(            
-            trans_data=os.path.join(
-                "LDC2004T19", 
-                "fe_03_p1_tran", 
-                "data", 
-                "trans",
-                ),
-            parsed_data="fisher-2004-annotations"
-        )
+        # all_2004 = self.parse_sentences(            
+        #     trans_data=os.path.join(
+        #         "LDC2004T19", 
+        #         "fe_03_p1_tran", 
+        #         "data", 
+        #         "trans",
+        #         ),
+        #     parsed_data="fisher-2004-annotations"
+        # )
 
-        all_2005 = self.parse_sentences(
-            trans_data=os.path.join(
-                "LDC2005T19", 
-                "fe_03_p2_tran", 
-                "data", 
-                "trans",
-                ),
-            parsed_data="fisher-2005-annotations"
-        )
+        # all_2005 = self.parse_sentences(
+
+        #     parsed_data="fisher-2005-annotations"
+        # )
+        self.parse_sentences_for_one_file(True, self.remove_df)
+
+
+    def parse_sentences_for_one_file(self, remove_df_words): 
+        # Loop over transcription files
+        trans_file =  self.input_path
+        segments = self.read_transcription(trans_file) 
+        # Loop over cleaned/pre-proceesed transcripts         
+        doc = [segment for segment in segments if segment]    
+        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
+        df_labels = self.remove_labels(df_labels)
+
+        if self.disfluency:
+            with open(self.output_path, "w") as output_file:
+                output_file.write("\n".join(df_labels))
+
+        return
+
+    def remove_labels(df_labels):
+        """
+        Method to remove all disfluency annotated labels
+        """
+        return [label.replace(" _ ", " ") for label in df_labels]
 
     def parse_sentences(self, trans_data, parsed_data):
-        input_dir = os.path.join(self.input_path, trans_data)
+        #input_dir = os.path.join(self.input_path, trans_data)
+        input_dir = os.path.join(self.input_path)
         output_dir = os.path.join(self.output_path, parsed_data)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)   
         # Loop over transcription files
+        print(input_dir)
         for root, dirnames, filenames in os.walk(input_dir):
+            print(root, dirnames, filenames )
             for filename in fnmatch.filter(filenames, "*.txt"):
+                print(filename)
                 trans_file = os.path.join(root, filename)
                 segments = self.read_transcription(trans_file) 
                 # Loop over cleaned/pre-proceesed transcripts         
