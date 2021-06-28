@@ -159,17 +159,7 @@ class Parser(DisfluencyTagger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        print("Loading model from {}...".format(self.model)) 
-        assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
-        self.info = self.torch_load()
-
-        assert "hparams" in self.info["spec"], "Older savefiles not supported"
-
-        self.info["spec"]["hparams"]["bert_model"] = kwargs["vocab_path"]
-
-        self.parser = parse_nk.NKChartParser.from_spec(
-            self.info["spec"], 
-            self.info["state_dict"])
+        
 
     def torch_load(self):
         if parse_nk.use_cuda:
@@ -238,6 +228,18 @@ class Annotate(Parser):
         self.disfluency = kwargs["disfluency"] 
         self.remove_df= kwargs["remove_df_words"]
         self.vocab_path = kwargs["vocab_path"]
+
+        print("Loading model from {}...".format(self.model)) 
+        assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
+        self.info = self.torch_load()
+
+        assert "hparams" in self.info["spec"], "Older savefiles not supported"
+
+        self.info["spec"]["hparams"]["bert_model"] = kwargs["vocab_path"]
+
+        self.parser = parse_nk.NKChartParser.from_spec(
+            self.info["spec"], 
+            self.info["state_dict"])
 
 
     def setup(self): 
