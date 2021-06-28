@@ -74,13 +74,14 @@ class DisfluencyTagger:
         return " ".join(list(map(lambda t: " ".join(t), tags)))
 
 
-class Parser(DisfluencyTagger):
-    """
+"""
+class Parser_OLD(DisfluencyTagger):  # new parser system to load model only ones  
+    "" "
     Loads the pre-trained parser model to find silver parse trees     
    
     Returns:
         Parsed and disfluency labelled transcripts
-    """
+    "" "
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -98,23 +99,23 @@ class Parser(DisfluencyTagger):
 
     def run_parser(self, input_sentences, vocab_path, remove_disfluency_words_bool=False):
         eval_batch_size = 1
-        print("Loading model from {}...".format(self.model))
+        print("Loading model from {}...".format(self.model))  # TODO load only once insetead every time
         assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
-        info = self.torch_load()
+        info = self.torch_load()  # TODO load only once insetead every time
 
         assert "hparams" in info["spec"], "Older savefiles not supported"
 
-        info["spec"]["hparams"]["bert_model"] = vocab_path
+        info["spec"]["hparams"]["bert_model"] = vocab_path  # TODO load only once insetead every time
 
-        """
+        "" "
         info["spec"]:
         {'hparams': {'attention_dropout': 0.2, 'bert_do_lower_case': True, 'bert_model': './model/bert-base-uncased.tar.gz', 'bert_transliterate': '', 'char_lstm_input_dropout': 0.2, 'clip_grad_norm': 0, 'd_char_emb': 32, 'd_ff': 2048, 'd_kv': 64, 'd_label_hidden': 250, 'd_model': 1024, 'd_tag_hidden': 250, 'elmo_dropout': 0.5, 'embedding_dropout': 0.0, 'learning_rate': 5e-05, 'learning_rate_warmup_steps': 160, 'max_consecutive_decays': 3, 'max_len_dev': 0, 'max_len_train': 0, 'morpho_emb_dropout': 0.2, 'num_heads': 8, 'num_layers': 2, 'num_layers_position_only': 0, 'partitioned': True, 'predict_tags': False, 'relu_dropout': 0.1, 'residual_dropout': 0.2, 'sentence_max_len': 300, 'silver_weight': 4, 'step_decay': True, 'step_decay_factor': 0.5, 'step_decay_patience': 5, 'tag_emb_dropout': 0.2, 'tag_loss_scale': 5.0, 'timing_dropout': 0.0, 'use_bert': True, 'use_bert_only': False, 'use_chars_lstm': False, 'use_elmo': False, 'use_tags': False, 'use_words': False, 'word_emb_dropout': 0.4}, 'char_vocab': <vocabulary.Vocabulary object at 0x7f56a3d144d0>, 'label_vocab': <vocabulary.Vocabulary object at 0x7f56a3c99e90>, 'word_vocab': <vocabulary.Vocabulary object at 0x7f56a3cb1490>, 'tag_vocab': <vocabulary.Vocabulary object at 0x7f56a3314c90>}
-        """
+        "" "
         parser = parse_nk.NKChartParser.from_spec(
             info["spec"], 
             info["state_dict"],
 
-            )
+        )  # TODO load only once insetead every time
 
         print("Parsing sentences...")
         sentences = [sentence.split() for sentence in input_sentences]
@@ -129,6 +130,82 @@ class Parser(DisfluencyTagger):
             subbatch_sentences = sentences[start_index:start_index+eval_batch_size]
             subbatch_sentences = [[(dummy_tag, word) for word in sentence] for sentence in subbatch_sentences]
             predicted, _ = parser.parse_batch(subbatch_sentences)
+            del _
+            all_predicted.extend([p.convert() for p in predicted])
+        
+        parse_trees, df_labels = [], []
+        for tree in all_predicted:      
+            linear_tree = tree.linearize()
+
+            parse_trees.append(linear_tree)
+            if self.disfluency:
+                tokens = linear_tree.split()
+                # disfluencies are dominated by EDITED nodes in parse trees
+                if "EDITED" not in linear_tree: 
+                    df_labels.append(self.fluent(tokens))
+                elif not remove_disfluency_words_bool:
+                    df_labels.append(self.disfluent(tokens))
+                    
+        return parse_trees, df_labels
+"""
+
+class Parser(DisfluencyTagger):
+    """
+    Loads the pre-trained parser model to find silver parse trees     
+   
+    Returns:
+        Parsed and disfluency labelled transcripts
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        print("Loading model from {}...".format(self.model)) 
+        assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
+        self.info = self.torch_load()
+
+        assert "hparams" in self.info["spec"], "Older savefiles not supported"
+
+        self.info["spec"]["hparams"]["bert_model"] = kwargs["vocab_path"]
+
+        self.parser = parse_nk.NKChartParser.from_spec(
+            self.info["spec"], 
+            self.info["state_dict"])
+
+    def torch_load(self):
+        if parse_nk.use_cuda:
+            return torch.load(
+                self.model
+                )
+        else:
+            return torch.load(
+                self.model, 
+                map_location=lambda storage, 
+                location: storage,
+                )
+
+    def run_parser(self, input_sentences, remove_disfluency_words_bool=False):
+        eval_batch_size = 1
+                
+
+        """
+        info["spec"]:
+        {'hparams': {'attention_dropout': 0.2, 'bert_do_lower_case': True, 'bert_model': './model/bert-base-uncased.tar.gz', 'bert_transliterate': '', 'char_lstm_input_dropout': 0.2, 'clip_grad_norm': 0, 'd_char_emb': 32, 'd_ff': 2048, 'd_kv': 64, 'd_label_hidden': 250, 'd_model': 1024, 'd_tag_hidden': 250, 'elmo_dropout': 0.5, 'embedding_dropout': 0.0, 'learning_rate': 5e-05, 'learning_rate_warmup_steps': 160, 'max_consecutive_decays': 3, 'max_len_dev': 0, 'max_len_train': 0, 'morpho_emb_dropout': 0.2, 'num_heads': 8, 'num_layers': 2, 'num_layers_position_only': 0, 'partitioned': True, 'predict_tags': False, 'relu_dropout': 0.1, 'residual_dropout': 0.2, 'sentence_max_len': 300, 'silver_weight': 4, 'step_decay': True, 'step_decay_factor': 0.5, 'step_decay_patience': 5, 'tag_emb_dropout': 0.2, 'tag_loss_scale': 5.0, 'timing_dropout': 0.0, 'use_bert': True, 'use_bert_only': False, 'use_chars_lstm': False, 'use_elmo': False, 'use_tags': False, 'use_words': False, 'word_emb_dropout': 0.4}, 'char_vocab': <vocabulary.Vocabulary object at 0x7f56a3d144d0>, 'label_vocab': <vocabulary.Vocabulary object at 0x7f56a3c99e90>, 'word_vocab': <vocabulary.Vocabulary object at 0x7f56a3cb1490>, 'tag_vocab': <vocabulary.Vocabulary object at 0x7f56a3314c90>}
+        """
+        
+
+        print("Parsing sentences...")
+        sentences = [sentence.split() for sentence in input_sentences]
+        # Tags are not available when parsing from raw text, so use a dummy tag
+        if "UNK" in self.parser.tag_vocab.indices:
+            dummy_tag = "UNK"
+        else:
+            dummy_tag = self.parser.tag_vocab.value(0)
+        
+        all_predicted = []
+        for start_index in range(0, len(sentences), eval_batch_size):
+            subbatch_sentences = sentences[start_index:start_index+eval_batch_size]
+            subbatch_sentences = [[(dummy_tag, word) for word in sentence] for sentence in subbatch_sentences]
+            predicted, _ = self.parser.parse_batch(subbatch_sentences)
             del _
             all_predicted.extend([p.convert() for p in predicted])
         
@@ -161,6 +238,7 @@ class Annotate(Parser):
         self.disfluency = kwargs["disfluency"] 
         self.remove_df= kwargs["remove_df_words"]
         self.vocab_path = kwargs["vocab_path"]
+
 
     def setup(self): 
         # all_2004 = self.parse_sentences(            
