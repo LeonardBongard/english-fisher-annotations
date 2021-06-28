@@ -13,6 +13,9 @@ https://www.aclweb.org/anthology/2020.acl-main.346.pdf
 (c) Paria Jamshid Lou, 14th July 2020.
 """
 
+import sys
+sys.path.append("/home/stud-leonardbongard/Bachelor_Arbeit/ba-leonard-bongard/models/submodules/english-fisher-annotations")
+
 import codecs
 import fnmatch
 import os
@@ -93,13 +96,20 @@ class Parser(DisfluencyTagger):
                 location: storage,
                 )
 
-    def run_parser(self, input_sentences, remove_disfluency_words_bool):
+    def run_parser(self, input_sentences, vocab_path, remove_disfluency_words_bool=False):
         eval_batch_size = 1
         print("Loading model from {}...".format(self.model))
         assert self.model.endswith(".pt"), "Only pytorch savefiles supported"
-
         info = self.torch_load()
+
         assert "hparams" in info["spec"], "Older savefiles not supported"
+
+        info["spec"]["hparams"]["bert_model"] = vocab_path
+
+        """
+        info["spec"]:
+        {'hparams': {'attention_dropout': 0.2, 'bert_do_lower_case': True, 'bert_model': './model/bert-base-uncased.tar.gz', 'bert_transliterate': '', 'char_lstm_input_dropout': 0.2, 'clip_grad_norm': 0, 'd_char_emb': 32, 'd_ff': 2048, 'd_kv': 64, 'd_label_hidden': 250, 'd_model': 1024, 'd_tag_hidden': 250, 'elmo_dropout': 0.5, 'embedding_dropout': 0.0, 'learning_rate': 5e-05, 'learning_rate_warmup_steps': 160, 'max_consecutive_decays': 3, 'max_len_dev': 0, 'max_len_train': 0, 'morpho_emb_dropout': 0.2, 'num_heads': 8, 'num_layers': 2, 'num_layers_position_only': 0, 'partitioned': True, 'predict_tags': False, 'relu_dropout': 0.1, 'residual_dropout': 0.2, 'sentence_max_len': 300, 'silver_weight': 4, 'step_decay': True, 'step_decay_factor': 0.5, 'step_decay_patience': 5, 'tag_emb_dropout': 0.2, 'tag_loss_scale': 5.0, 'timing_dropout': 0.0, 'use_bert': True, 'use_bert_only': False, 'use_chars_lstm': False, 'use_elmo': False, 'use_tags': False, 'use_words': False, 'word_emb_dropout': 0.4}, 'char_vocab': <vocabulary.Vocabulary object at 0x7f56a3d144d0>, 'label_vocab': <vocabulary.Vocabulary object at 0x7f56a3c99e90>, 'word_vocab': <vocabulary.Vocabulary object at 0x7f56a3cb1490>, 'tag_vocab': <vocabulary.Vocabulary object at 0x7f56a3314c90>}
+        """
         parser = parse_nk.NKChartParser.from_spec(
             info["spec"], 
             info["state_dict"],
@@ -123,8 +133,9 @@ class Parser(DisfluencyTagger):
             all_predicted.extend([p.convert() for p in predicted])
         
         parse_trees, df_labels = [], []
-        for tree in all_predicted:          
+        for tree in all_predicted:      
             linear_tree = tree.linearize()
+
             parse_trees.append(linear_tree)
             if self.disfluency:
                 tokens = linear_tree.split()
@@ -149,6 +160,7 @@ class Annotate(Parser):
         self.model = kwargs["model"] 
         self.disfluency = kwargs["disfluency"] 
         self.remove_df= kwargs["remove_df_words"]
+        self.vocab_path = kwargs["vocab_path"]
 
     def setup(self): 
         # all_2004 = self.parse_sentences(            
@@ -165,7 +177,7 @@ class Annotate(Parser):
 
         #     parsed_data="fisher-2005-annotations"
         # )
-        self.parse_sentences_for_one_file(True, self.remove_df)
+        return self.parse_sentences_for_one_file(self.remove_df)
 
 
     def parse_sentences_for_one_file(self, remove_df_words): 
@@ -174,20 +186,21 @@ class Annotate(Parser):
         segments = self.read_transcription(trans_file) 
         # Loop over cleaned/pre-proceesed transcripts         
         doc = [segment for segment in segments if segment]    
-        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
+        parse_trees, df_labels = self.run_parser(doc, self.vocab_path, remove_df_words)
         df_labels = self.remove_labels(df_labels)
 
-        if self.disfluency:
-            with open(self.output_path, "w") as output_file:
-                output_file.write("\n".join(df_labels))
+        # if self.disfluency:
+        #     print("Write into file:", self.output_path)
+        #     with open(self.output_path, "w") as output_file:
+        #         output_file.write("\n".join(df_labels))
 
-        return
+        return "\n".join(df_labels)
 
-    def remove_labels(df_labels):
+    def remove_labels(self, df_labels):
         """
         Method to remove all disfluency annotated labels
         """
-        return [label.replace(" _ ", " ") for label in df_labels]
+        return [label.replace(" _", "") for label in df_labels]
 
     def parse_sentences(self, trans_data, parsed_data):
         #input_dir = os.path.join(self.input_path, trans_data)
