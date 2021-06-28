@@ -264,7 +264,7 @@ class Annotate(Parser):
         segments = self.read_transcription(trans_file) 
         # Loop over cleaned/pre-proceesed transcripts         
         doc = [segment for segment in segments if segment]    
-        parse_trees, df_labels = self.run_parser(doc, self.vocab_path, remove_df_words)
+        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
         df_labels = self.remove_labels(df_labels)
 
         # if self.disfluency:
