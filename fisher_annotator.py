@@ -276,7 +276,7 @@ class Annotate(Parser):
         # Loop over cleaned/pre-proceesed transcripts         
         doc = [segment for segment in segments if segment]    
         parse_trees, df_labels = self.run_parser(doc, remove_df_words)
-        df_labels = self.remove_labels(df_labels)
+        df_labels = self.remove_labels(df_labels, remove_df_words)
 
         # if self.disfluency:
         #     print("Write into file:", self.output_path)
@@ -285,10 +285,12 @@ class Annotate(Parser):
 
         return "\n".join(df_labels)
 
-    def remove_labels(self, df_labels):
+    def remove_labels(self, df_labels, remove_df_words):
         """
         Method to remove all disfluency annotated labels
         """
+        if not remove_df_words:
+            return df_labels
         return [label.replace(" _", "") for label in df_labels]
 
     def parse_sentences(self, trans_data, parsed_data):
