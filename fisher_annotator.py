@@ -41,13 +41,19 @@ class DisfluencyTagger:
         super().__init__(**kwargs)
  
     @staticmethod
-    def fluent(tokens):
+    def fluent(tokens, return_list=False):
+
+        if return_list:
+            leaves = [(t.replace(")",""), "_") for t in tokens if ")" in t]  
+            return leaves
+            
         leaves_tags = [t.replace(")","")+" _" for t in tokens if ")" in t]      
         return " ".join(leaves_tags)
 
     @staticmethod
-    def disfluent(tokens):
+    def disfluent(tokens, return_list=False):
         # remove first and last brackets
+
         tokens, tokens[-1] = tokens[1:], tokens[-1][:-1]
         open_bracket, close_bracket, pointer = 0, 0, 0      
         df_region = False
@@ -72,6 +78,8 @@ class DisfluencyTagger:
                 df_region = False            
 
             pointer += 1
+        if return_list:
+            return tags
         return " ".join(list(map(lambda t: " ".join(t), tags)))
 
 
@@ -174,7 +182,7 @@ class Parser(DisfluencyTagger):
                 location: storage,
                 )
 
-    def run_parser(self, input_sentences, remove_disfluency_words_bool=False):
+    def run_parser(self, input_sentences, remove_disfluency_words_bool=False, return_list=False):
         eval_batch_size = 1
                 
 
@@ -214,10 +222,10 @@ class Parser(DisfluencyTagger):
                 #print("linear tree", linear_tree)
                 # disfluencies are dominated by EDITED nodes in parse trees
                 if "EDITED" not in linear_tree: 
-                    df_labels.append(self.fluent(tokens))
+                    df_labels.append(self.fluent(tokens, return_list))
                 
                 elif not remove_disfluency_words_bool:
-                    df_labels.append(self.disfluent(tokens))
+                    df_labels.append(self.disfluent(tokens, return_list))
                 #print(df_labels)
                 #print(parse_trees)
                     
@@ -269,15 +277,18 @@ class Annotate(Parser):
         return self.parse_sentences_for_one_file(self.remove_df)
 
 
-    def parse_sentences_for_one_file(self, remove_df_words): 
+    def parse_sentences_for_one_file(self, remove_df_words, return_list=False): 
         # Loop over transcription files
         trans_file =  self.input_path
         segments = self.read_transcription(trans_file) 
         #print("segments:", segments)
         # Loop over cleaned/pre-proceesed transcripts         
         doc = [segment for segment in segments if segment]    
-        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
+        print("doc", doc)
+        parse_trees, df_labels = self.run_parser(doc, remove_df_words, return_list)
+        print(parse_trees, df_labels)
         df_labels = self.remove_labels(df_labels, remove_df_words)
+        print("df_labels", df_labels)
 
         # if self.disfluency:
         #     print("Write into file:", self.output_path)
@@ -285,9 +296,11 @@ class Annotate(Parser):
         #         output_file.write("\n".join(df_labels))
 
         # return "\n ".join(df_labels)  # TODO may reenable after disfluency prep
+        if return_list:
+            return df_labels
         return " ".join(df_labels)
 
-    def parse_sentences_for_one_sentence(self, segments): 
+    def parse_sentences_for_one_sentence(self, doc,remove_df_words, return_list=False): 
         # Loop over transcription files
         #trans_file =  self.input_path
         #segments = self.read_transcription(trans_file) 
@@ -300,17 +313,18 @@ class Annotate(Parser):
         # segments = self.read_transcription(trans_file) 
         # print(segments)
         # print("++++++++++++++++++++++++")
-        segments = yield segments
         remove_df_words = self.remove_df   
-        doc = [segment for segment in segments if segment]    
-        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
+        # doc = [segment for segment in segments if segment]    
+        parse_trees, df_labels = self.run_parser(doc, remove_df_words, return_list)
+        print("dflabel1", df_labels)
         df_labels = self.remove_labels(df_labels, remove_df_words)
 
         # if self.disfluency:
         #     print("Write into file:", self.output_path)
         #     with open(self.output_path, "w") as output_file:
         #         output_file.write("\n".join(df_labels))
-
+        if return_list:
+            return df_labels
         return "\n".join(df_labels)
 
     def remove_labels(self, df_labels, remove_df_words):
@@ -363,8 +377,9 @@ class Annotate(Parser):
                 if line.startswith("#") or len(line) <= 1:
                     continue     
                 #line = line.replace("\n", " ")          
-                 
+
                 tokens = line.split() 
+
                 #print(tokens)
                 yield " ".join(tokens[skip:])
                 #yield self.validate_transcription(
