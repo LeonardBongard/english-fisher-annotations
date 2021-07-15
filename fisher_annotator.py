@@ -12,13 +12,14 @@ https://www.aclweb.org/anthology/2020.acl-main.346.pdf
 
 (c) Paria Jamshid Lou, 14th July 2020.
 """
+import os
 
 import sys
-sys.path.append("/home/stud-leonardbongard/Bachelor_Arbeit/ba-leonard-bongard/models/submodules/english-fisher-annotations")
+#sys.path.append("/home/stud-leonardbongard/Bachelor_Arbeit/ba-leonard-bongard/models/submodules/english-fisher-annotations")
+sys.path.append(os.path.join(os.getcwd(),"models", "submodules", "english-fisher-annotations" ))  # Should add main repo dir to paths
 
 import codecs
 import fnmatch
-import os
 import re   
 import torch
 
