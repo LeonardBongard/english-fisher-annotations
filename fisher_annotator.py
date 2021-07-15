@@ -200,25 +200,25 @@ class Parser(DisfluencyTagger):
             all_predicted.extend([p.convert() for p in predicted]) 
         
         parse_trees, df_labels = [], []
-        print([p.convert() for p in predicted])
-        print("allp", all_predicted)
+        #print([p.convert() for p in predicted])
+        #print("allp", all_predicted)
         for tree in all_predicted:      
-            print("tree", tree)
+            #print("tree", tree)
             linear_tree = tree.linearize()
 
             parse_trees.append(linear_tree)
             if self.disfluency:
                 tokens = linear_tree.split()
-                print("tokens", tokens)
-                print("linear tree", linear_tree)
+                #print("tokens", tokens)
+                #print("linear tree", linear_tree)
                 # disfluencies are dominated by EDITED nodes in parse trees
                 if "EDITED" not in linear_tree: 
                     df_labels.append(self.fluent(tokens))
                 
                 elif not remove_disfluency_words_bool:
                     df_labels.append(self.disfluent(tokens))
-                print(df_labels)
-                print(parse_trees)
+                #print(df_labels)
+                #print(parse_trees)
                     
         return parse_trees, df_labels
 
@@ -272,8 +272,35 @@ class Annotate(Parser):
         # Loop over transcription files
         trans_file =  self.input_path
         segments = self.read_transcription(trans_file) 
-        print("segments:", segments)
+        #print("segments:", segments)
         # Loop over cleaned/pre-proceesed transcripts         
+        doc = [segment for segment in segments if segment]    
+        parse_trees, df_labels = self.run_parser(doc, remove_df_words)
+        df_labels = self.remove_labels(df_labels, remove_df_words)
+
+        # if self.disfluency:
+        #     print("Write into file:", self.output_path)
+        #     with open(self.output_path, "w") as output_file:
+        #         output_file.write("\n".join(df_labels))
+
+        # return "\n ".join(df_labels)  # TODO may reenable after disfluency prep
+        return " ".join(df_labels)
+
+    def parse_sentences_for_one_sentence(self, segments): 
+        # Loop over transcription files
+        #trans_file =  self.input_path
+        #segments = self.read_transcription(trans_file) 
+        #print("segments:", segments)
+        # Loop over cleaned/pre-proceesed transcripts      
+        # print("#################")
+        # print(segments)
+
+        # trans_file =  self.input_path
+        # segments = self.read_transcription(trans_file) 
+        # print(segments)
+        # print("++++++++++++++++++++++++")
+        segments = yield segments
+        remove_df_words = self.remove_df   
         doc = [segment for segment in segments if segment]    
         parse_trees, df_labels = self.run_parser(doc, remove_df_words)
         df_labels = self.remove_labels(df_labels, remove_df_words)
@@ -300,11 +327,11 @@ class Annotate(Parser):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)   
         # Loop over transcription files
-        print(input_dir)
+        #print(input_dir)
         for root, dirnames, filenames in os.walk(input_dir):
-            print(root, dirnames, filenames )
+            #print(root, dirnames, filenames )
             for filename in fnmatch.filter(filenames, "*.txt"):
-                print(filename)
+                #print(filename)
                 trans_file = os.path.join(root, filename)
                 segments = self.read_transcription(trans_file) 
                 # Loop over cleaned/pre-proceesed transcripts         
@@ -328,14 +355,16 @@ class Annotate(Parser):
 
         return
 
-    def read_transcription(self, trans_file, skip_token=False):  # Skip token isnerted by leonard
+    def read_transcription(self, trans_file, skip_token=False):  # Skip token inserted by leonard
         skip = 3 if skip_token else 0
         with codecs.open(trans_file, "r", "utf-8") as fp:
             for line in fp:
                 if line.startswith("#") or len(line) <= 1:
-                    continue                
+                    continue     
+                #line = line.replace("\n", " ")          
+                 
                 tokens = line.split() 
-
+                #print(tokens)
                 yield " ".join(tokens[skip:])
                 #yield self.validate_transcription(
                  #   " ".join(tokens[skip:])
