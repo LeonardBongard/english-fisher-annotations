@@ -210,17 +210,12 @@ class Parser(DisfluencyTagger):
             all_predicted.extend([p.convert() for p in predicted]) 
         
         parse_trees, df_labels = [], []
-        print([p.convert() for p in predicted])
-        print("allp", all_predicted)
         for tree in all_predicted:      
-            print("tree", tree)
             linear_tree = tree.linearize()
 
             parse_trees.append(linear_tree)
             if self.disfluency:
                 tokens = linear_tree.split()
-                print("tokens", tokens)
-                print("linear tree", linear_tree)
                 # disfluencies are dominated by EDITED nodes in parse trees
                 if "EDITED" not in linear_tree: 
                     df_labels.append(self.fluent(tokens, return_list))
@@ -318,7 +313,6 @@ class Annotate(Parser):
         remove_df_words = self.remove_df   
         # doc = [segment for segment in segments if segment]    
         parse_trees, df_labels = self.run_parser(doc, remove_df_words, return_list)
-        print("dflabel1", df_labels)
         df_labels = self.remove_labels(df_labels, remove_df_words)
 
 
@@ -330,10 +324,12 @@ class Annotate(Parser):
             return df_labels
         return "\n".join(df_labels)
 
-    def remove_labels(self, df_labels):
+    def remove_labels(self, df_labels, remove_df_words):
         """
         Method to remove all disfluency annotated labels
         """
+        if not remove_df_words:
+            return df_labels
         return [label.replace(" _", "") for label in df_labels]
 
     def parse_sentences(self, trans_data, parsed_data):
@@ -343,11 +339,8 @@ class Annotate(Parser):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)   
         # Loop over transcription files
-        print(input_dir)
         for root, dirnames, filenames in os.walk(input_dir):
-            print(root, dirnames, filenames )
             for filename in fnmatch.filter(filenames, "*.txt"):
-                print(filename)
                 trans_file = os.path.join(root, filename)
                 segments = self.read_transcription(trans_file) 
                 # Loop over cleaned/pre-proceesed transcripts         
@@ -371,7 +364,7 @@ class Annotate(Parser):
 
         return
 
-    def read_transcription(self, trans_file, skip_token=False):  # Skip token isnerted by leonard
+    def read_transcription(self, trans_file, skip_token=False):  # Skip token inserted by leonard
         skip = 3 if skip_token else 0
         with codecs.open(trans_file, "r", "utf-8") as fp:
             for line in fp:
