@@ -63,15 +63,16 @@ class DisfluencyTagger:
         while pointer < len(tokens):
             open_bracket += tokens[pointer].count("(")                
             close_bracket += tokens[pointer].count(")")
-            if "(EDITED" in tokens[pointer]:  
+            if "(EDITED" in tokens[pointer]:
                 open_bracket, close_bracket = 1, 0             
                 df_region = True
                 
             elif ")" in tokens[pointer]:
                 label = "E" if df_region else "_"  
-                tags.append(
-                    (tokens[pointer].replace(")", ""), label)
-                    )                 
+                if not label == "E":  # Should ignore disfluent words and dont apeend them to the out string
+                    tags.append(
+                        (tokens[pointer].replace(")", ""), label)
+                        )                 
             if all(
                 (close_bracket,
                 open_bracket == close_bracket)
@@ -117,7 +118,6 @@ class Parser(DisfluencyTagger):
         info["spec"]:
         {'hparams': {'attention_dropout': 0.2, 'bert_do_lower_case': True, 'bert_model': './model/bert-base-uncased.tar.gz', 'bert_transliterate': '', 'char_lstm_input_dropout': 0.2, 'clip_grad_norm': 0, 'd_char_emb': 32, 'd_ff': 2048, 'd_kv': 64, 'd_label_hidden': 250, 'd_model': 1024, 'd_tag_hidden': 250, 'elmo_dropout': 0.5, 'embedding_dropout': 0.0, 'learning_rate': 5e-05, 'learning_rate_warmup_steps': 160, 'max_consecutive_decays': 3, 'max_len_dev': 0, 'max_len_train': 0, 'morpho_emb_dropout': 0.2, 'num_heads': 8, 'num_layers': 2, 'num_layers_position_only': 0, 'partitioned': True, 'predict_tags': False, 'relu_dropout': 0.1, 'residual_dropout': 0.2, 'sentence_max_len': 300, 'silver_weight': 4, 'step_decay': True, 'step_decay_factor': 0.5, 'step_decay_patience': 5, 'tag_emb_dropout': 0.2, 'tag_loss_scale': 5.0, 'timing_dropout': 0.0, 'use_bert': True, 'use_bert_only': False, 'use_chars_lstm': False, 'use_elmo': False, 'use_tags': False, 'use_words': False, 'word_emb_dropout': 0.4}, 'char_vocab': <vocabulary.Vocabulary object at 0x7f56a3d144d0>, 'label_vocab': <vocabulary.Vocabulary object at 0x7f56a3c99e90>, 'word_vocab': <vocabulary.Vocabulary object at 0x7f56a3cb1490>, 'tag_vocab': <vocabulary.Vocabulary object at 0x7f56a3314c90>}
         """
-        
 
         print("Parsing sentences...")
         sentences = [sentence.split() for sentence in input_sentences]
@@ -128,6 +128,9 @@ class Parser(DisfluencyTagger):
             dummy_tag = self.parser.tag_vocab.value(0)
         
         all_predicted = []
+        if len(sentences) == 0:
+            return None
+
         for start_index in range(0, len(sentences), eval_batch_size):
             subbatch_sentences = sentences[start_index:start_index+eval_batch_size]
             subbatch_sentences = [[(dummy_tag, word) for word in sentence] for sentence in subbatch_sentences]
@@ -151,8 +154,12 @@ class Parser(DisfluencyTagger):
                 if "EDITED" not in linear_tree: 
                     df_labels.append(self.fluent(tokens, return_list))
                 
-                elif not remove_disfluency_words_bool:
+                # elif not remove_disfluency_words_bool:
+                #     df_labels.append(self.disfluent(tokens, return_list))
+
+                else:
                     df_labels.append(self.disfluent(tokens, return_list))
+         
                 #print(df_labels)
                 #print(parse_trees)
 
@@ -197,15 +204,26 @@ class Annotate(Parser):
         segments = self.read_transcription(trans_file) 
         #print("segments:", segments)
         # Loop over cleaned/pre-proceesed transcripts         
-        doc = [segment for segment in segments if segment]    
+        # doc = [segment for segment in segments ]# if segment] # uf stmt removes empty sentences
+        doc = []
+        for segment in segments:
+            if segment:
+                doc.append(segment)
+            else:
+                doc.append(" _")
         #print("doc", doc)
-        parse_trees, df_labels = self.run_parser(doc, remove_df_words, return_list)
+        undefined = self.run_parser(doc, remove_df_words, return_list)
+        if undefined is not None:
+            parse_trees, df_labels = undefined
+        else:
+            return ""
+
         #print(parse_trees, df_labels)
         df_labels = self.remove_labels(df_labels)
-
         if return_list:
             return df_labels
-        return " ".join(df_labels)
+        return "\n".join(df_labels)
+#        return " ".join(df_labels)
 
     def parse_sentences_for_one_sentence(self, doc,remove_df_words, return_list=False): 
         # Loop over transcription files
@@ -217,14 +235,14 @@ class Annotate(Parser):
 
         if return_list:
             return df_labels
-        return "\n".join(df_labels)
+        return " ".join(df_labels)
 
     def remove_labels(self, df_labels):
         """
         Method to remove all disfluency annotated labels
         """
-        return [label.replace(" _", "") for label in df_labels]
-
+        return [label.replace(" _", "").replace("_", "") for label in df_labels]
+        
     def parse_sentences(self, trans_data, parsed_data):
         #input_dir = os.path.join(self.input_path, trans_data)
         input_dir = os.path.join(self.input_path)
