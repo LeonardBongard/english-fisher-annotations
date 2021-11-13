@@ -27,7 +27,7 @@ import torch
 
 import parse_nk
 
-
+counter = 0
 class DisfluencyTagger:
     """
     This class is called when self.disfluency==True.    
@@ -69,10 +69,14 @@ class DisfluencyTagger:
                 
             elif ")" in tokens[pointer]:
                 label = "E" if df_region else "_"  
-                if not label == "E":  # Should ignore disfluent words and dont apeend them to the out string
+                if not label == "E":  # Should ignore disfluent words and dont append them to the out string
                     tags.append(
                         (tokens[pointer].replace(")", ""), label)
-                        )                 
+                        ) 
+                else:
+                    global counter
+                    print(counter, tokens[pointer].replace(")", ""), label)
+                    counter += 1                
             if all(
                 (close_bracket,
                 open_bracket == close_bracket)
@@ -139,17 +143,17 @@ class Parser(DisfluencyTagger):
             all_predicted.extend([p.convert() for p in predicted]) 
         
         parse_trees, df_labels = [], []
-        print([p.convert() for p in predicted])
+        #print([p.convert() for p in predicted])
         print("allp", all_predicted)
         for tree in all_predicted:      
-            print("tree", tree)
+            #print("tree", tree)
             linear_tree = tree.linearize()
 
             parse_trees.append(linear_tree)
             if self.disfluency:
                 tokens = linear_tree.split()
-                print("tokens", tokens)
-                print("linear tree", linear_tree)
+                #print("tokens", tokens)
+                #print("linear tree", linear_tree)
                 # disfluencies are dominated by EDITED nodes in parse trees
                 if "EDITED" not in linear_tree: 
                     df_labels.append(self.fluent(tokens, return_list))
